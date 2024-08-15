@@ -26,9 +26,9 @@ function parse_command_line_arguments()
 
         "--outdir"
             help = "Path of directory to save outputs under"
-           # default = "/glade/work/zhihuaz/Data/FrontalZone"   
-            # default = "/glade/derecho/scratch/zhihuaz/FrontalZone/Output"
-            default = "./Data/"
+            #default = "/glade/work/mbailly/Data/FrontalZone"   
+            default = "/glade/derecho/scratch/mbailly/Buoyancy-Driven-Convection/Output"
+            #default = "./Data/"
             arg_type = String
     end
     return parse_args(settings)
@@ -42,15 +42,14 @@ end
 casename = args["casename"]
 outdir   = args["outdir"]
 
-casename = "sim2D2"
-
 ###########-------- SIMULATION PARAMETERS ----------------#############
 @info "Load in simulation parameters"
 
 include("simparams.jl")
 simparams = SimParams()
 
-group_symbol = Symbol(casename)
+group = casename[1:6]
+group_symbol = Symbol(group)
 possible_symbols = fieldnames(typeof(simparams))
 
 if !(group_symbol in possible_symbols)
@@ -90,7 +89,7 @@ state_parameters = (; pm.N₀², pm.M², pm.f, pm.σ, pm.B₀)
 
 # TODO: surface buoyancy flux - add diurnal variability
 
-@inline surface_buoyancy_flux_amplitude(z,t,p) = p.B₀
+@inline surface_buoyancy_flux_amplitude(z,t,p) = -p.B₀
 
 surface_buoyancy_flux = FluxBoundaryCondition(surface_buoyancy_flux_amplitude, parameters=state_parameters)
 
@@ -227,7 +226,7 @@ simulation.output_writers[:averages] = NetCDFOutputWriter(model, fields_mean;
                                                        overwrite_existing = true)
 
 
-simulation.output_writers[:field_writer] = NetCDFOutputWriter(model, fields, filename=casename*".nc", schedule=TimeInterval(pm.out_interval_mean), overwrite_existing = true)
+simulation.output_writers[:field_writer] = NetCDFOutputWriter(model, dir = outdir, fields, filename=casename*".nc", schedule=TimeInterval(pm.out_interval_mean), overwrite_existing = true)
 
 ###########-------- RUN! --------------#############
 run(`nvidia-smi`) # check how much memory used on a GPU run

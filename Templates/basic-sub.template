@@ -13,11 +13,13 @@
 #PBS -l job_priority=economy
 ### To the casper queue
 ###PBS -q gpudev
-###PBS -q casper
-#PBS -q develop
+#PBS -q casper
+###PBS -q develop
 ### Log file
-#PBS -o Logs/run_{0}-{1}.log
-#PBS -j oe
+### output
+#PBS -o Logs/run_{0}-{1}.out
+### error
+#PBS -e Logs/run_{0}-{1}.err
 ### email 
 #PBS -M mbailly@umd.edu
 #PBS -m abe
@@ -31,13 +33,14 @@ module --ignore-cache load julia/1.9
 ### Run simulation
 proj_dir=/glade/u/home/$USER/Buoyancy-Driven-Convection
 
-julia --pkgimages=no --project=proj_dir Simulations/buoyancy_and_wind-driven_convection.jl --nTf={1} sim{0}-{1}
+
+julia --pkgimages=no --project=. Simulations/buoyancy_and_wind-driven_convection.jl --nTf={1} sim{0}-{1}
 
 ### Overwrite previous log file
-LOG=$proj_dir/Logs/run{0}.log
-if [ -f "$LOG" ]; then
-    rm -f $LOG
-fi
-mv $proj_dir/Logs/run_{0}.log $LOG
-
-qstat -f $PBS_JOBID >> Logs/run_{0}.log
+#LOG=$proj_dir/Logs/run{0}.log
+#if [ -f "$LOG" ]; then
+#    rm -f $LOG
+#fi
+#mv $proj_dir/Logs/run_{0}.log $LOG
+#
+#qstat -f $PBS_JOBID >> Logs/run_{0}.log

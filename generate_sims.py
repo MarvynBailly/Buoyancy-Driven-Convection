@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 from os import system
 
-simulation_days = 20
+simulation_days = 5
 casenames = ["2D1",
-             "2D2",
+             #"2D2",
              ]
 
 

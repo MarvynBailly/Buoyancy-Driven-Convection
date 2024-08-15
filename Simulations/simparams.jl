@@ -44,4 +44,27 @@ using Parameters
         B₀ = -4.24e-8,
     )
 
+    sim2D3 = (; commons...,
+    #2D₃
+    M² = -2.12e-7,
+    B₀ = -4.24e-8,
+    )
+
+    sim2D4 = (; commons...,
+    #2D₄
+    M² = -8.248-7,
+    B₀ = -4.24e-8,
+    )
+
+    sim2D5 = (; commons...,
+    #2D₅
+    M² = -4.24e-7,
+    B₀ = -8.48e-8,
+    )
+
+    sim2D6 = (; commons...,
+    #2D₆
+    M² = -4.24e-7,
+    B₀ = -2.12e-8,
+    )
 end
