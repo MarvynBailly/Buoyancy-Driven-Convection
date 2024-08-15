@@ -1,0 +1,47 @@
+#!/bin/bash -l
+
+### Job Name
+#PBS -N run_{0}
+### Project Code Allocation
+#PBS -A UMCP0020
+### Resources
+#PBS -l select=1:ncpus=16:mem=32GB:ngpus=1
+### type of GPU
+#PBS -l gpu_type=v100
+### Run Time
+#PBS -l walltime=03:00:00
+#PBS -l job_priority=economy
+### To the casper queue
+###PBS -q gpudev
+###PBS -q casper
+#PBS -q develop
+### Log file
+#PBS -o Logs/run_{0}.log
+#PBS -j oe
+### email 
+#PBS -M mbailly@umd.edu
+#PBS -m abe
+
+### Module load
+module --force purge
+module --ignore-cache load ncarenv/23.10 gcc ncarcompilers netcdf
+module --ignore-cache load cuda
+module --ignore-cache load julia/1.9
+
+### Set up data file
+export TMPDIR=/glade/derecho/scratch/$USER/temp
+mkdir -p $TMPDIR
+
+### Run simulation
+proj_dir=/glade/u/home/$USER/curTest
+
+julia --pkgimages=no --project=proj_dir Simulations/buoyancy_and_wind-driven_convection.jl --outdir="./Data/" {0}
+
+### Overwrite previous log file
+LOG=$proj_dir/Logs/run{0}.log
+if [ -f "$LOG" ]; then
+    rm -f $LOG
+fi
+mv $proj_dir/Logs/run_{0}.log $LOG
+
+qstat -f $PBS_JOBID >> Logs/spinup{0}.log

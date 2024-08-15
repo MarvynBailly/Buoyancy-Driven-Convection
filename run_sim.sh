@@ -1,7 +1,7 @@
 #!/bin/bash -l
 
 ### Job Name
-#PBS -N run_2D2sim-20
+#PBS -N run_2D2
 ### Project Code Allocation
 #PBS -A UMCP0020
 ### Resources
@@ -12,9 +12,9 @@
 ###PBS -q gpudev
 #PBS -q casper
 ### output
-#PBS -o Logs/run_2D2sim-20.out
+#PBS -o Logs/run_2D2.out
 ### error
-#PBS -e Logs/run_2D2sim-20.err
+#PBS -e Logs/run_2D2-20.err
 ### type of GPU
 #PBS -l gpu_type=v100
 ### email 
@@ -28,4 +28,4 @@ module --ignore-cache load cuda
 module --ignore-cache load julia/1.9
 ### file to run
 
-julia --pkgimages=no --project=. Simulations/buoyancy_and_wind-driven_convection.jl --outdir="./Data/" --nTf=20 2D2sim-20
+julia --pkgimages=no --project=. Simulations/buoyancy_and_wind-driven_convection.jl --outdir="./Data/" 2D2
