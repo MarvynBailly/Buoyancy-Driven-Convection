@@ -106,42 +106,24 @@ V_field = BackgroundField(Vt, parameters = state_parameters)
 
 ###########-------- SPONGE LAYER -----------------#############
 @info "Set up bottom sponge layer...."
-
-# Quadratic presented in paper
-# @inline (damping_func)(x, z, t, b, p) = (-100 ≤ z ≤ -80) ? -p.σ * ((-80 - z) / 20)^2 *(b - p.N₀²*z) : 0  
-
-
 #### velocity sponge layer ####
 @inline (mask)(x, z) =exp(-(z - (-100))^2 / (2 * (6)^2))
 
-# TODO: couldn't pass the paramter in N₀²
-@inline (target_b)(x,y,z) = z*9e-5  #z*pm.N₀²
-
 
 uvw_sponge = Relaxation(rate=pm.σ, mask=mask, target = 0)
-b_sponge = Relaxation(rate=pm.σ, mask=mask, target = target_b)#(, parameters=state_parameters))
+
+
+#### buoyancy sponge layer ####
+# Quadratic presented in paper
+# -p.σ * ((-80 - z) / 20)^2 *(b - p.N₀²*z)  
+@inline target_b(x, y, z, p) = z*p.N₀²
+@inline mask_b(x, y, z, p) = (-100 ≤ z ≤ -80) ? ((-80 - z) / 20)^2 : 0
+@inline sponge_b(x, y, z, b, p)  = -p.σ * mask(x, z) *(b - target_b(x, y, z, p))
+Fb = Forcing(sponge_b, field_dependencies = (:b), parameters = state_parameters)
 
 
 
-# TODO: Add buoyancy sponge layer 
-# causes slow time stepping down
-#sponge_forcing = (; u=uvw_sponge, v=uvw_sponge, w=uvw_sponge, b=b_sponge)
-# double check that linear target/gaussian doesn't work 
-# try adding sponge layer via sponging
-# sponge_b(x,y,z,b,p) = rate(b - target) 
-# than add as a forcing
-# let dev know that 2D doesn't work with stuff
-# TODO: how much the sponge layer effects the results.
-
-# TODO: center around day 15 with a difference of one inenrtial 
-
-# NOTE: You can see the overturning of the ML in the u and v plots
-
-
-# seems to be okay without buoyancy
-sponge_forcing = (; u=uvw_sponge, v=uvw_sponge, w=uvw_sponge)#, b=b_sponge)
-
-
+sponge_forcing = (; u=uvw_sponge, v=uvw_sponge, w=uvw_sponge, b= Fb)
 ###########-------- Model -----------------#############
 @info "Setting up model...."
 
