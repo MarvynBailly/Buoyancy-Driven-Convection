@@ -121,10 +121,23 @@ V_field = BackgroundField(background_velocity, parameters = state_parameters)
 ###########-------- SPONGE LAYER -----------------#############
 @info "Set up bottom sponge layer...."
 
+sl_type = "pw"
 
 @inline gauss_mask(x, z) =exp(-(z - (-100))^2 / (2 * (6)^2))
 @inline pc_mask(x, z) = (-100 ≤ z ≤ -80) ? ((-80 - z) / 20)^2 : 0
 @inline no_mask(x, z) = 0
+
+if(sl_type == "pw")
+    @info "     loading piecewise mask"
+    mask=pc_mask
+elseif(sl_type == "gauss")
+    @info "     loading Gaussian mask"
+    mask=pc_mask
+elseif(sl_type == "none")
+    @info "     no sponge layer"
+else
+    error("Undefined sponger layer type")
+end
 
 @inline target_uvw(x, y, z) = 0
 @inline target_b(x, y, z, p) = z*p.N₀²
