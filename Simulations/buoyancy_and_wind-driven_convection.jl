@@ -121,7 +121,6 @@ V_field = BackgroundField(background_velocity, parameters = state_parameters)
 ###########-------- SPONGE LAYER -----------------#############
 @info "Set up bottom sponge layer...."
 
-sl_type = "pw"
 
 @inline gauss_mask(x, z) =exp(-(z - (-100))^2 / (2 * (6)^2))
 @inline pc_mask(x, z) = (-100 ≤ z ≤ -80) ? ((-80 - z) / 20)^2 : 0
