@@ -90,7 +90,7 @@ state_parameters = (; pm.N₀², pm.M², pm.f, pm.σ, pm.B₀)
 
 # TODO: surface buoyancy flux - add diurnal variability
 
-@inline surface_buoyancy_flux_amplitude(z,t,p) = p.B₀
+@inline surface_buoyancy_flux_amplitude(z,t,p) = -p.B₀
 
 surface_buoyancy_flux = FluxBoundaryCondition(surface_buoyancy_flux_amplitude, parameters=state_parameters)
 
