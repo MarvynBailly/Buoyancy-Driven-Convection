@@ -42,15 +42,24 @@ end
 casename = args["casename"]
 outdir   = args["outdir"]
 
+casename = "sim2D2"
+
 ###########-------- SIMULATION PARAMETERS ----------------#############
 @info "Load in simulation parameters"
 
 include("simparams.jl")
-group = ifelse(casename[3]=='1', "sim2D1","sim2D2")
+simparams = SimParams()
+
+group_symbol = Symbol(casename)
+possible_symbols = fieldnames(typeof(simparams))
+
+if !(group_symbol in possible_symbols)
+    error("The group symbol ", group_symbol, " is NOT in possible_symbols.")
+end
 
 @info "Loading $(group) with parameters:"
 
-pm = getproperty(SimParams(), Symbol(group))
+pm = getproperty(SimParams(), Symbol(group_symbol))
 
 state_parameters = (; pm.N₀², pm.M², pm.f, pm.σ, pm.B₀)
 for (param, val) in pairs(state_parameters)
