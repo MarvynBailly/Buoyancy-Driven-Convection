@@ -21,7 +21,7 @@ function parse_command_line_arguments()
             arg_type = String
 
         "--nTf"
-            help = "Number of inertial periods the simulation runs"
+            help = "Number of days the simulation runs"
             arg_type = Float64
 
         "--outdir"
@@ -29,6 +29,11 @@ function parse_command_line_arguments()
            # default = "/glade/work/zhihuaz/Data/FrontalZone"   
             # default = "/glade/derecho/scratch/zhihuaz/FrontalZone/Output"
             default = "./Data/"
+            arg_type = String
+
+        "--SL"
+            help = "Type of Sponge Layer to use"
+            default = "pw"
             arg_type = String
     end
     return parse_args(settings)
@@ -41,8 +46,8 @@ end
 
 casename = args["casename"]
 outdir   = args["outdir"]
+sl_type  = args["SL"]
 
-casename = "sim2D2"
 
 ###########-------- SIMULATION PARAMETERS ----------------#############
 @info "Load in simulation parameters"
@@ -109,30 +114,32 @@ v_bcs = FieldBoundaryConditions(top = free_slip_v, bottom = GradientBoundaryCond
 B_field = BackgroundField(background_buoyancy, parameters = state_parameters)
 
 # set the background
-@inline Vt(x, z, t, p) = (z) * (p.M² / p.f) 
-V_field = BackgroundField(Vt, parameters = state_parameters)
+@inline background_velocity(x, z, t, p) = (z) * (p.M² / p.f) 
+V_field = BackgroundField(background_velocity, parameters = state_parameters)
 
 
 ###########-------- SPONGE LAYER -----------------#############
 @info "Set up bottom sponge layer...."
-#### velocity sponge layer ####
-@inline (mask)(x, z) =exp(-(z - (-100))^2 / (2 * (6)^2))
 
 
-uvw_sponge = Relaxation(rate=pm.σ, mask=mask, target = 0)
+@inline gauss_mask(x, z) =exp(-(z - (-100))^2 / (2 * (6)^2))
+@inline pc_mask(x, z) = (-100 ≤ z ≤ -80) ? ((-80 - z) / 20)^2 : 0
+@inline no_mask(x, z) = 0
 
-
-#### buoyancy sponge layer ####
-# Quadratic presented in paper
-# -p.σ * ((-80 - z) / 20)^2 *(b - p.N₀²*z)  
+@inline target_uvw(x, y, z) = 0
 @inline target_b(x, y, z, p) = z*p.N₀²
-@inline mask_b(x, y, z, p) = (-100 ≤ z ≤ -80) ? ((-80 - z) / 20)^2 : 0
+ 
+@inline sponge_u(x, y, z, u, p)  = -p.σ * mask(x, z) *(u - target_uvw(x, y, z))
+@inline sponge_v(x, y, z, v, p)  = -p.σ * mask(x, z) *(v - target_uvw(x, y, z))
+@inline sponge_w(x, y, z, w, p)  = -p.σ * mask(x, z) *(w - target_uvw(x, y, z))
 @inline sponge_b(x, y, z, b, p)  = -p.σ * mask(x, z) *(b - target_b(x, y, z, p))
+
+Fu = Forcing(sponge_u, field_dependencies = (:u), parameters = state_parameters)
+Fv = Forcing(sponge_v, field_dependencies = (:v), parameters = state_parameters)
+Fw = Forcing(sponge_w, field_dependencies = (:w), parameters = state_parameters)
 Fb = Forcing(sponge_b, field_dependencies = (:b), parameters = state_parameters)
 
-
-
-sponge_forcing = (; u=uvw_sponge, v=uvw_sponge, w=uvw_sponge, b= Fb)
+sponge_forcing = (; u=Fu, v=Fv, w=Fw, b= Fb)
 ###########-------- Model -----------------#############
 @info "Setting up model...."
 
