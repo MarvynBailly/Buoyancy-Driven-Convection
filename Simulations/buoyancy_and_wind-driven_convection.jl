@@ -49,8 +49,6 @@ outdir   = args["outdir"]
 sl_type  = args["SL"]
 
 ###########-------- SIMULATION PARAMETERS ----------------#############
-@info "Load in simulation parameters"
-
 include("simparams.jl")
 simparams = SimParams()
 
@@ -58,12 +56,12 @@ group = casename[1:6]
 group_symbol = Symbol(group)
 possible_symbols = fieldnames(typeof(simparams))
 
+
 if !(group_symbol in possible_symbols)
     error("The group symbol ", group_symbol, " is NOT in possible_symbols.")
 end
 
 @info "Loading $(group) with parameters:"
-
 pm = getproperty(SimParams(), Symbol(group_symbol))
 
 state_parameters = (; pm.N₀², pm.M², pm.f, pm.σ, pm.B₀)
@@ -121,30 +119,31 @@ V_field = BackgroundField(background_velocity, parameters = state_parameters)
 ###########-------- SPONGE LAYER -----------------#############
 @info "Set up bottom sponge layer...."
 
-@inline gauss_mask(x, z) =exp(-(z - (-100))^2 / (2 * (6)^2))
-@inline pc_mask(x, z) = (-100 ≤ z ≤ -80) ? ((-80 - z) / 20)^2 : 0
+@inline pw_mask(x, z) = (-100 ≤ z ≤ -80) ? ((-80 - z) / 20)^2 : 0
+@inline gs_mask(x, z) = exp(-(z - (-100))^2 / (2 * (6)^2))
 @inline no_mask(x, z) = 0
+
+@inline target_uvw(x, y, z) = 0
+@inline target_b(x, y, z, p) = z*p.N₀²
 
 if(sl_type == "pw")
     @info "     loading piecewise mask"
-    mask=pc_mask
-elseif(sl_type == "gauss")
+    @inline mask(x,z) = pw_mask(x,z)
+elseif(sl_type == "gs")
     @info "     loading Gaussian mask"
-    mask=pc_mask
-elseif(sl_type == "none")
+    @inline mask(x,z) = gs_mask(x,z)
+elseif(sl_type == "no")
     @info "     no sponge layer"
+    @inline mask(x,z) = no_mask(x,z)
 else
     error("Undefined sponger layer type")
 end
 
-@inline target_uvw(x, y, z) = 0
-@inline target_b(x, y, z, p) = z*p.N₀²
+@inline sponge_u(x, y, z, u, p)  = -p.σ * mask(x, z) * (u - target_uvw(x, y, z))
+@inline sponge_v(x, y, z, v, p)  = -p.σ * mask(x, z) * (v - target_uvw(x, y, z))
+@inline sponge_w(x, y, z, w, p)  = -p.σ * mask(x, z) * (w - target_uvw(x, y, z))
+@inline sponge_b(x, y, z, b, p)  = -p.σ * mask(x, z) * (b - target_b(x, y, z, p))
  
-@inline sponge_u(x, y, z, u, p)  = -p.σ * mask(x, z) *(u - target_uvw(x, y, z))
-@inline sponge_v(x, y, z, v, p)  = -p.σ * mask(x, z) *(v - target_uvw(x, y, z))
-@inline sponge_w(x, y, z, w, p)  = -p.σ * mask(x, z) *(w - target_uvw(x, y, z))
-@inline sponge_b(x, y, z, b, p)  = -p.σ * mask(x, z) *(b - target_b(x, y, z, p))
-
 Fu = Forcing(sponge_u, field_dependencies = (:u), parameters = state_parameters)
 Fv = Forcing(sponge_v, field_dependencies = (:v), parameters = state_parameters)
 Fw = Forcing(sponge_w, field_dependencies = (:w), parameters = state_parameters)
