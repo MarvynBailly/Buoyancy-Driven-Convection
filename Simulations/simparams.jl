@@ -28,7 +28,7 @@ using Parameters
     cfl = 0.75,
     max_Δt = 5minutes,
 
-    out_interval_mean = 15minutes
+    out_interval_mean = 5minutes
 
     )
 

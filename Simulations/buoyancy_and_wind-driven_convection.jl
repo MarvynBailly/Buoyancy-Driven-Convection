@@ -44,7 +44,7 @@ for (arg,val) in args
     @info "    $arg => $val"
 end
 
-casename = args["casename"]
+casename = "sim2D2"#args["casename"]
 outdir   = args["outdir"]
 sl_type  = args["SL"]
 
@@ -85,7 +85,7 @@ end
 @inline z_faces(k) = pm.Lz * (ζ₀(k) * Σ(k) - 1)
 
 
-grid = RectilinearGrid(GPU(), size=(pm.Nx, pm.Nz), x=(0, pm.Nx), z=z_faces, topology=(Periodic, Flat, Bounded))
+grid = RectilinearGrid( size=(pm.Nx, pm.Nz), x=(0, pm.Nx), z=z_faces, topology=(Periodic, Flat, Bounded))
 
 ###########-------- BOUNDARY CONDITIONS -----------------#############
 @info "Set up boundary conditions...."
@@ -220,31 +220,82 @@ simulation.callbacks[:progress] = Callback(progress, IterationInterval(100))
 ###########-------- DIAGNOSTICS --------------#############
 @info "Add diagnostics..."
 
-mU = Field(Average(model.velocities.u, dims=(1, 2)))
-mV = Field(Average(model.velocities.v, dims=1))
-mW = Field(Average(model.velocities.w, dims=1))
-mN² = Field(Average(∂z(model.tracers.b), dims=(1, 2)))
-mb = Field(Average(model.tracers.b, dims=1))
+u,v,w = model.velocities
+b = model.tracers.b
 
-N²F = Field(∂z(model.tracers.b))
-uF = Field(model.velocities.u)
-vF = Field(model.velocities.v)
-wF = Field(model.velocities.w)
-bF = Field(model.tracers.b)
+# Averages
+mU = Field(Average(u,      dims=(1, 2)))
+mV = Field(Average(v,      dims=(1, 2)))
+mW = Field(Average(w,      dims=(1, 2)))
+mN² = Field(Average(∂z(b),    dims=(1, 2)))
+mb = Field(Average(b,         dims=(1, 2)))
+
+# Perts
+u′ = Field(u - mU)
+v′ = Field(v - mV)
+w′ = Field(w - mW)
+b′ = Field(b - mb)
 
 
-fields = Dict("u" => uF, "v" => vF, "w" => wF, "b" => bF, "N2" => N²F)
+vw′dz = Field(Average(∂z(v′ * w′), dims=(1,2)))
+fivw′dz = Field(1/pm.f * vw′dz)
+uw′dz = Field(Average(∂z(u′ * w′), dims=(1,2)))
+fiuw′dz = Field(1/pm.f * uw′dz)
 
-fields_mean = Dict("u" => mU, "v" => mV, "w" => mW, "N2" => mN², "b" => mb)
+# Mean Buoyancy Budget
+κ = diffusivity(model.closure, model.diffusivity_fields, Val(:b))
+bdz2 = Field(Average(∂z(∂z(b)),    dims=(1, 2)))
+κbdz2 = Field(κ * bdz2)
+
+wbdz = Field(Average(∂z(w′ * b′),    dims=(1, 2)))
+
+uM2 = Field(mU * pm.M²)
+
+# Mean Potential Vorticity
+vt = Field(v + model.background_fields.velocities.v)
+mvt = Field(Average(v + model.background_fields.velocities.v,dims=(1, 2)))
+mvtdz = Field(Average(∂z(v + model.background_fields.velocities.v),dims=(1, 2)))
+M2mvtdz = Field(pm.M² * mvtdz)
+
+ζ = Field(∂x(v) - ∂y(u))
+mζ = Field(Average(∂x(v) - ∂y(u), dims=(1,2)))
+ζ′ = Field(ζ - mζ)
+ζb′ = Field(Average(∂z(ζ′*b′), dims=(1,2)))
+
+fbdz = Field(pm.f * mb) 
+
+# Mean Potential Vorticity Flux
+fM2u = Field(pm.f*pm.M²*mU)
+
+fwbdz = Field(pm.f * wbdz)
+
+
+
+
+
+# N²F = Field(∂z(b))
+# uF = Field(u)
+# vF = Field(v)
+# wF = Field(w)
+# bF = Field(b)
+
+
+# fields = Dict("u" => uF, "v" => vF, "w" => wF, "b" => bF, "N2" => N²F)
+
+fields_mean = Dict("u" => mU, "v" => mV, "w" => mW, "N2" => mN², "b" => mb, "fivw′dz" => fivw′dz, "fiuw′dz" => fiuw′dz, "κbdz2" => κbdz2, "wbdz" => wbdz, "uM2" => uM2, "M2mvtdz" => M2mvtdz, "ζb′" => ζb′, "fbdz" => fbdz, "fM2u" => fM2u, "fwbdz" => fwbdz)
+
+global_attributes = Dict("ν₀" => pm.ν₀, "κ₀" => pm.κ₀,
+                         "B₀" => pm.B₀, "N₀²" => pm.N₀², "M²" => pm.M², "f" => pm.f)
 
 simulation.output_writers[:averages] = NetCDFOutputWriter(model, fields_mean;
                                                        filename = casename * "_averages.nc",
                                                        dir = outdir,
+                                                       global_attributes = global_attributes,
                                                        schedule = TimeInterval(pm.out_interval_mean),
                                                        overwrite_existing = true)
 
 
-simulation.output_writers[:field_writer] = NetCDFOutputWriter(model, dir = outdir, fields, filename=casename*".nc", schedule=TimeInterval(pm.out_interval_mean), overwrite_existing = true)
+# simulation.output_writers[:field_writer] = NetCDFOutputWriter(model, dir = outdir, fields, filename=casename*".nc", schedule=TimeInterval(pm.out_interval_mean), overwrite_existing = true)
 
 ###########-------- RUN! --------------#############
 run(`nvidia-smi`) # check how much memory used on a GPU run
