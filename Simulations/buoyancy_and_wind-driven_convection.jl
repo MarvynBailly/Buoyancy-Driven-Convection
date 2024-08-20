@@ -44,7 +44,7 @@ for (arg,val) in args
     @info "    $arg => $val"
 end
 
-casename = "sim2D2"#args["casename"]
+casename = "sim2D4"#args["casename"]
 outdir   = args["outdir"]
 sl_type  = args["SL"]
 
@@ -85,7 +85,7 @@ end
 @inline z_faces(k) = pm.Lz * (ζ₀(k) * Σ(k) - 1)
 
 
-grid = RectilinearGrid( size=(pm.Nx, pm.Nz), x=(0, pm.Nx), z=z_faces, topology=(Periodic, Flat, Bounded))
+grid = RectilinearGrid(GPU(), size=(pm.Nx, pm.Nz), x=(0, pm.Nx), z=z_faces, topology=(Periodic, Flat, Bounded))
 
 ###########-------- BOUNDARY CONDITIONS -----------------#############
 @info "Set up boundary conditions...."
@@ -196,7 +196,6 @@ stop_time = ifelse(args["nTf"] == nothing, pm.nTf, args["nTf"])days
 Δy  = minimum_yspacing(grid, Center(), Center(), Center())
 Δz  = minimum_zspacing(grid, Center(), Center(), Center())
 Δt₀ = pm.cfl * min(Δx, Δy, Δz) / max(pm.M² / pm.f, 0.02)seconds
-# simulation = Simulation(model, Δt=Δt₀, stop_time=10minute, wall_time_limit=12hours)
 simulation = Simulation(model, Δt=Δt₀, stop_time=stop_time, wall_time_limit=12hours)
 
 wizard = TimeStepWizard(cfl=pm.cfl, diffusive_cfl=pm.cfl, min_change=0, max_change=5, max_Δt=pm.max_Δt)
@@ -262,15 +261,12 @@ mζ = Field(Average(∂x(v) - ∂y(u), dims=(1,2)))
 ζ′ = Field(ζ - mζ)
 ζb′ = Field(Average(∂z(ζ′*b′), dims=(1,2)))
 
-fbdz = Field(pm.f * mb) 
+fbdz = Field(pm.f * mN²) 
 
 # Mean Potential Vorticity Flux
 fM2u = Field(pm.f*pm.M²*mU)
 
 fwbdz = Field(pm.f * wbdz)
-
-
-
 
 
 # N²F = Field(∂z(b))
@@ -282,7 +278,7 @@ fwbdz = Field(pm.f * wbdz)
 
 # fields = Dict("u" => uF, "v" => vF, "w" => wF, "b" => bF, "N2" => N²F)
 
-fields_mean = Dict("u" => mU, "v" => mV, "w" => mW, "N2" => mN², "b" => mb, "fivw′dz" => fivw′dz, "fiuw′dz" => fiuw′dz, "κbdz2" => κbdz2, "wbdz" => wbdz, "uM2" => uM2, "M2mvtdz" => M2mvtdz, "ζb′" => ζb′, "fbdz" => fbdz, "fM2u" => fM2u, "fwbdz" => fwbdz)
+fields_mean = Dict("u" => mU, "v" => mV, "w" => mW, "vt" = vt, "N2" => mN², "b" => mb, "fivw′dz" => fivw′dz, "fiuw′dz" => fiuw′dz, "κbdz2" => κbdz2, "wbdz" => wbdz, "uM2" => uM2, "M2mvtdz" => M2mvtdz, "ζb′" => ζb′, "fbdz" => fbdz, "fM2u" => fM2u, "fwbdz" => fwbdz)
 
 global_attributes = Dict("ν₀" => pm.ν₀, "κ₀" => pm.κ₀,
                          "B₀" => pm.B₀, "N₀²" => pm.N₀², "M²" => pm.M², "f" => pm.f)

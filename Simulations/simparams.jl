@@ -52,7 +52,7 @@ using Parameters
 
     sim2D4 = (; commons...,
     #2D₄
-    M² = -8.248-7,
+    M² = -8.24e-7,
     B₀ = -4.24e-8,
     )
 
