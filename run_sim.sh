@@ -1,7 +1,7 @@
 #!/bin/bash -l
 
 ### Job Name
-#PBS -N run_2D2-20
+#PBS -N run_2D2-20-nosl
 ### Project Code Allocation
 #PBS -A UMCP0020
 ### Resources
@@ -13,11 +13,13 @@
 #PBS -l job_priority=economy
 ### To the casper queue
 ###PBS -q gpudev
-###PBS -q casper
-#PBS -q develop
+#PBS -q casper
+###PBS -q develop
 ### Log file
-#PBS -o Logs/run_2D2-20.log
-#PBS -j oe
+### output
+#PBS -o Logs/run_2D2-20-nosl.out
+### error
+#PBS -e Logs/run_2D2-20-nosl.err
 ### email 
 #PBS -M mbailly@umd.edu
 #PBS -m abe
@@ -31,13 +33,14 @@ module --ignore-cache load julia/1.9
 ### Run simulation
 proj_dir=/glade/u/home/$USER/Buoyancy-Driven-Convection
 
-julia --pkgimages=no --project=proj_dir Simulations/buoyancy_and_wind-driven_convection.jl --nTf=20 sim2D2-20
+
+julia --pkgimages=no --project=. Simulations/buoyancy_and_wind-driven_convection.jl --SL="no" --nTf=20 sim2D2-20-nosl
 
 ### Overwrite previous log file
-LOG=$proj_dir/Logs/run2D2.log
-if [ -f "$LOG" ]; then
-    rm -f $LOG
-fi
-mv $proj_dir/Logs/run_2D2.log $LOG
-
-qstat -f $PBS_JOBID >> Logs/run_2D2.log
+#LOG=$proj_dir/Logs/run2D2.log
+#if [ -f "$LOG" ]; then
+#    rm -f $LOG
+#fi
+#mv $proj_dir/Logs/run_2D2.log $LOG
+#
+#qstat -f $PBS_JOBID >> Logs/run_2D2.log
