@@ -31,6 +31,11 @@ function parse_command_line_arguments()
             #default = "./Data/"
             arg_type = String
 
+        "--flux"
+            help = "Type of flux"
+            default = "constant"
+            arg_type = String
+
         "--SL"
             help = "Type of Sponge Layer to use"
             default = "pw"
@@ -47,6 +52,7 @@ end
 casename = args["casename"]
 outdir   = args["outdir"]
 sl_type  = args["SL"]
+flux_type = args["flux"]
 
 ###########-------- SIMULATION PARAMETERS ----------------#############
 include("simparams.jl")
@@ -64,7 +70,7 @@ end
 @info "Loading $(group) with parameters:"
 pm = getproperty(SimParams(), Symbol(group_symbol))
 
-state_parameters = (; pm.N₀², pm.M², pm.f, pm.σ, pm.B₀)
+state_parameters = (; pm.N₀², pm.M², pm.f, pm.σ, pm.B₀, pm.flux_depth)
 for (param, val) in pairs(state_parameters)
     @info "     $param => $val"
 end
@@ -89,11 +95,34 @@ grid = RectilinearGrid(GPU(), size=(pm.Nx, pm.Nz), x=(0, pm.Nx), z=z_faces, topo
 
 ###########-------- BOUNDARY CONDITIONS -----------------#############
 @info "Set up boundary conditions...."
-state_parameters = (; pm.N₀², pm.M², pm.f, pm.σ, pm.B₀)
 
 # TODO: surface buoyancy flux - add diurnal variability
 
-@inline surface_buoyancy_flux_amplitude(z,t,p) = -p.B₀
+# assuming t is in seconds 
+function piecewise_flux(t,p)
+    time_minutes_mod = mod(t/(60 * 60),24)
+    if(time_minutes_mod <= 6)
+        value = p.flux_depth
+    elseif(time_minutes_mod > 6 && time_minutes_mod < 18)
+        value = π*(-p.B₀ - p.flux_depth)*sin((π / 12)*(time_minutes_mod - 6)) + p.flux_depth
+    elseif(time_minutes_mod >= 18)
+        value = p.flux_depth
+    end
+    return value
+end
+
+
+if(flux_type == "constant")
+    @info "     loading constant flux"
+    @inline flux_forcing(t,p) = -p.B₀
+elseif(flux_type == "pw1")
+    @info "     loading $sl_type"
+    @inline flux_forcing(t,p) = piecewise_flux(t,p)
+else
+    error("Undefined flux type")
+end
+
+@inline surface_buoyancy_flux_amplitude(z,t,p) = flux_forcing(t,p)
 
 surface_buoyancy_flux = FluxBoundaryCondition(surface_buoyancy_flux_amplitude, parameters=state_parameters)
 
@@ -269,6 +298,9 @@ fM2u = Field(pm.f*pm.M²*mU)
 fwbdz = Field(pm.f * wbdz)
 
 
+# Buoyancy Flux  
+model.tracers.b.boundary_conditions.top
+
 # N²F = Field(∂z(b))
 # uF = Field(u)
 # vF = Field(v)
@@ -279,7 +311,7 @@ fwbdz = Field(pm.f * wbdz)
 
 # fields = Dict("u" => uF, "v" => vF, "w" => wF, "b" => bF, "N2" => N²F)
 
-fields_mean = Dict("u" => mU, "v" => mV, "w" => mW, "vt" => vt, "N2" => mN², "b" => mb, "fivw′dz" => fivw′dz, "fiuw′dz" => fiuw′dz, "κbdz2" => κbdz2, "wbdz" => wbdz, "uM2" => uM2, "M2mvtdz" => M2mvtdz, "ζb′" => ζb′, "fbdz" => fbdz, "fM2u" => fM2u, "fwbdz" => fwbdz)
+fields_mean = Dict("u" => mU, "v" => mV, "w" => mW, "vt" => vt, "N2" => mN², "b" => mb, "fivw′dz" => fivw′dz, "fiuw′dz" => fiuw′dz, "κbdz2" => κbdz2, "wbdz" => wbdz, "uM2" => uM2, "M2mvtdz" => M2mvtdz, "ζb′" => ζb′, "fbdz" => fbdz, "fM2u" => fM2u, "fwbdz" => fwbdz,) #"bf" => bf)
 
 global_attributes = Dict("ν₀" => pm.ν₀, "κ₀" => pm.κ₀,
                          "B₀" => pm.B₀, "N₀²" => pm.N₀², "M²" => pm.M², "f" => pm.f,

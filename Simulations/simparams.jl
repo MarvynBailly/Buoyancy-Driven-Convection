@@ -28,7 +28,9 @@ using Parameters
     cfl = 0.75,
     max_Δt = 5minutes,
 
-    out_interval_mean = 5minutes
+    out_interval_mean = 5minutes,
+
+    flux_depth = -8e-8,
 
     )
 
