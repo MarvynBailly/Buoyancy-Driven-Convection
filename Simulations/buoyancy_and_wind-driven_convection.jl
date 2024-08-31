@@ -96,28 +96,28 @@ grid = RectilinearGrid(GPU(), size=(pm.Nx, pm.Nz), x=(0, pm.Nx), z=z_faces, topo
 ###########-------- BOUNDARY CONDITIONS -----------------#############
 @info "Set up boundary conditions...."
 
-# TODO: surface buoyancy flux - add diurnal variability
-
 # assuming t is in seconds 
-function piecewise_flux(t,p)
+@inline function piecewise_flux(t,p)
     time_minutes_mod = mod(t/(60 * 60),24)
     if(time_minutes_mod <= 6)
-        value = p.flux_depth
+        value = p.flux_depth #cool 
     elseif(time_minutes_mod > 6 && time_minutes_mod < 18)
-        value = π*(-p.B₀ - p.flux_depth)*sin((π / 12)*(time_minutes_mod - 6)) + p.flux_depth
+        value = π*(p.B₀ - p.flux_depth)*sin((π / 12)*(time_minutes_mod - 6)) + p.flux_depth
     elseif(time_minutes_mod >= 18)
         value = p.flux_depth
-    end
+    else
+	    error("Buoyancy Flux Function Error")
+        value = p.flux_depth
+	end
     return value
 end
-
 
 if(flux_type == "constant")
     @info "     loading constant flux"
     @inline flux_forcing(t,p) = -p.B₀
 elseif(flux_type == "pw1")
     @info "     loading $sl_type"
-    @inline flux_forcing(t,p) = piecewise_flux(t,p)
+    @inline flux_forcing(t,p) = -piecewise_flux(t,p)
 else
     error("Undefined flux type")
 end
@@ -154,7 +154,6 @@ V_field = BackgroundField(background_velocity, parameters = state_parameters)
 
 @inline target_uvw(x, y, z) = 0
 @inline target_b(x, y, z, p) = z*p.N₀²
-
 if(sl_type == "pw")
     @info "     loading piecewise mask"
     @inline mask(x,z) = pw_mask(x,z)
@@ -297,9 +296,33 @@ fM2u = Field(pm.f*pm.M²*mU)
 
 fwbdz = Field(pm.f * wbdz)
 
+# TODO: Replace this with Tomas's method
+b_flux1(model) = piecewise_flux(model.clock.time,state_parameters)
 
-# Buoyancy Flux  
-model.tracers.b.boundary_conditions.top
+
+
+
+α = pm.αᵣ + pm.αₛ
+
+fields_mean = Dict("u" => mU, "v" => mV, "w" => mW, "vt" => vt, "N2" => mN², "b" => mb, "fivw′dz" => fivw′dz, "fiuw′dz" => fiuw′dz, "κbdz2" => κbdz2, "wbdz" => wbdz, "uM2" => uM2, "M2mvtdz" => M2mvtdz, "ζb′" => ζb′, "fbdz" => fbdz, "fM2u" => fM2u, "fwbdz" => fwbdz, "b_flux" => b_flux1)
+
+dims = Dict("b_flux" => ())
+
+global_attributes = Dict("ν₀" => pm.ν₀, "κ₀" => pm.κ₀,
+                         "B₀" => pm.B₀, "N₀²" => pm.N₀², "M²" => pm.M², "f" => pm.f,
+                         "α" => α, "β" => pm.β)
+
+
+simulation.output_writers[:averages] = NetCDFOutputWriter(model, fields_mean;
+                                                       filename = casename * "_averages.nc",
+                                                       dir = outdir,
+                                                       dimensions = dims,
+                                                       global_attributes = global_attributes,
+                                                       schedule = TimeInterval(pm.out_interval_mean),
+                                                       overwrite_existing = true)
+
+
+
 
 # N²F = Field(∂z(b))
 # uF = Field(u)
@@ -307,22 +330,7 @@ model.tracers.b.boundary_conditions.top
 # wF = Field(w)
 # bF = Field(b)
 
-α = pm.αᵣ + pm.αₛ
-
 # fields = Dict("u" => uF, "v" => vF, "w" => wF, "b" => bF, "N2" => N²F)
-
-fields_mean = Dict("u" => mU, "v" => mV, "w" => mW, "vt" => vt, "N2" => mN², "b" => mb, "fivw′dz" => fivw′dz, "fiuw′dz" => fiuw′dz, "κbdz2" => κbdz2, "wbdz" => wbdz, "uM2" => uM2, "M2mvtdz" => M2mvtdz, "ζb′" => ζb′, "fbdz" => fbdz, "fM2u" => fM2u, "fwbdz" => fwbdz,) #"bf" => bf)
-
-global_attributes = Dict("ν₀" => pm.ν₀, "κ₀" => pm.κ₀,
-                         "B₀" => pm.B₀, "N₀²" => pm.N₀², "M²" => pm.M², "f" => pm.f,
-                         "α" => α, "β" => pm.β)
-
-simulation.output_writers[:averages] = NetCDFOutputWriter(model, fields_mean;
-                                                       filename = casename * "_averages.nc",
-                                                       dir = outdir,
-                                                       global_attributes = global_attributes,
-                                                       schedule = TimeInterval(pm.out_interval_mean),
-                                                       overwrite_existing = true)
 
 
 # simulation.output_writers[:field_writer] = NetCDFOutputWriter(model, dir = outdir, fields, filename=casename*".nc", schedule=TimeInterval(pm.out_interval_mean), overwrite_existing = true)
