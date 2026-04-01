@@ -30,7 +30,7 @@ using Parameters
 
     out_interval_mean = 5minutes,
 
-    flux_depth = -8e-8,
+    cool_rate_ratio = 5, #cool / B_0  = cool_rate_ratio
 
     )
 

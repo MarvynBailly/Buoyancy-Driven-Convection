@@ -2,6 +2,8 @@ using ArgParse
 
 using Oceananigans
 using Oceananigans.Units
+using Oceananigans.BoundaryConditions: getbc
+using Oceanostics.FlowDiagnostics: ErtelPotentialVorticity
 
 using Random
 Random.seed!(11)
@@ -70,7 +72,7 @@ end
 @info "Loading $(group) with parameters:"
 pm = getproperty(SimParams(), Symbol(group_symbol))
 
-state_parameters = (; pm.N₀², pm.M², pm.f, pm.σ, pm.B₀, pm.flux_depth)
+state_parameters = (; pm.N₀², pm.M², pm.f, pm.σ, pm.B₀, pm.cool_rate_ratio)
 for (param, val) in pairs(state_parameters)
     @info "     $param => $val"
 end
@@ -96,18 +98,19 @@ grid = RectilinearGrid(GPU(), size=(pm.Nx, pm.Nz), x=(0, pm.Nx), z=z_faces, topo
 ###########-------- BOUNDARY CONDITIONS -----------------#############
 @info "Set up boundary conditions...."
 
-# assuming t is in seconds 
+# t is in seconds 
 @inline function piecewise_flux(t,p)
     time_minutes_mod = mod(t/(60 * 60),24)
     if(time_minutes_mod <= 6)
-        value = p.flux_depth #cool 
+        value = p.cool_rate_ratio*p.B₀ #cool 
     elseif(time_minutes_mod > 6 && time_minutes_mod < 18)
-        value = π*(p.B₀ - p.flux_depth)*sin((π / 12)*(time_minutes_mod - 6)) + p.flux_depth
+        value = (p.cool_rate_ratio + (-1 +p.cool_rate_ratio) * π* cos((π*time_minutes_mod)/12))*p.B₀ 
+        #π*(p.B₀ - p.flux_depth)*sin((π / 12)*(time_minutes_mod - 6)) + p.flux_depth
     elseif(time_minutes_mod >= 18)
-        value = p.flux_depth
+        value = p.cool_rate_ratio*p.B₀
     else
 	    error("Buoyancy Flux Function Error")
-        value = p.flux_depth
+        value = p.cool_rate_ratio*p.B₀
 	end
     return value
 end
@@ -219,7 +222,6 @@ set!(model, b = init_buoyancy)
 @info "Define the simulation...."
 
 stop_time = ifelse(args["nTf"] == nothing, pm.nTf, args["nTf"])days
-
 Δx  = minimum_xspacing(grid, Center(), Center(), Center())
 Δy  = minimum_yspacing(grid, Center(), Center(), Center())
 Δz  = minimum_zspacing(grid, Center(), Center(), Center())
@@ -291,27 +293,52 @@ mζ = Field(Average(∂x(v) - ∂y(u), dims=(1,2)))
 
 fbdz = Field(pm.f * mN²) 
 
+
+### PV 
+pv = ErtelPotentialVorticity(model; location=(Face, Face, Face), add_background=true)
+PV = Field(Average(pv, dims=2))
+
+
 # Mean Potential Vorticity Flux
 fM2u = Field(pm.f*pm.M²*mU)
 
 fwbdz = Field(pm.f * wbdz)
 
-# TODO: Replace this with Tomas's method
-b_flux1(model) = piecewise_flux(model.clock.time,state_parameters)
+# Buoyancy Flux
+@inline kernel_getbc(i, j, k, grid, boundary_condition, clock, fields) =
+    getbc(boundary_condition, i, j, grid, clock, fields)
+
+@inline function SurfaceTracerFlux(model::NonhydrostaticModel, tracer_name)
+    model_fields = fields(model)
+    tracer = model.tracers[tracer_name]
+    tra_bc = tracer.boundary_conditions.top
+    LX = location(tracer, Int32(1))
+    LY = location(tracer, Int32(2))
+    return KernelFunctionOperation{LX, LY, Nothing}(kernel_getbc, model.grid, tra_bc, model.clock, model_fields)
+end
+
+# get horizontal averaged surface buoyancy flux
+Qb = Field(Average(SurfaceTracerFlux(model, :b), dims=(1,2)))
+
+
+# b_flux1(model) = piecewise_flux(model.clock.time,state_parameters)
 
 
 
 
 α = pm.αᵣ + pm.αₛ
 
-fields_mean = Dict("u" => mU, "v" => mV, "w" => mW, "vt" => vt, "N2" => mN², "b" => mb, "fivw′dz" => fivw′dz, "fiuw′dz" => fiuw′dz, "κbdz2" => κbdz2, "wbdz" => wbdz, "uM2" => uM2, "M2mvtdz" => M2mvtdz, "ζb′" => ζb′, "fbdz" => fbdz, "fM2u" => fM2u, "fwbdz" => fwbdz, "b_flux" => b_flux1)
+fields_mean = Dict("u" => mU, "v" => mV, "w" => mW, "vt" => vt, "N2" => mN², "b" => mb, "fivw′dz" => fivw′dz, "fiuw′dz" => fiuw′dz, "κbdz2" => κbdz2, "wbdz" => wbdz, "uM2" => uM2, "M2mvtdz" => M2mvtdz, "ζb′" => ζb′, "fbdz" => fbdz, "fM2u" => fM2u, "fwbdz" => fwbdz, "b_flux" => Qb, "PV" => PV)
+
 
 dims = Dict("b_flux" => ())
 
 global_attributes = Dict("ν₀" => pm.ν₀, "κ₀" => pm.κ₀,
                          "B₀" => pm.B₀, "N₀²" => pm.N₀², "M²" => pm.M², "f" => pm.f,
-                         "α" => α, "β" => pm.β)
+                         "α" => α, "β" => pm.β, "depth-factor" => pm.cool_rate_ratio)
 
+
+outdir = "./Data"
 
 simulation.output_writers[:averages] = NetCDFOutputWriter(model, fields_mean;
                                                        filename = casename * "_averages.nc",
